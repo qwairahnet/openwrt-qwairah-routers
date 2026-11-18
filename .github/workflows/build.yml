@@ -1,0 +1,40 @@
+name: Build MT7621 Routers QWAIRAH
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        profile: [lgu_gapm-7200u, kt_km08-708h]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build OpenWrt for ${{ matrix.profile }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y build-essential clang flex bison gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget curl jq
+          git clone --branch openwrt-23.05 --depth 1 https://github.com/openwrt/openwrt.git openwrt
+          cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
+          cat << 'CONF' > .config
+          CONFIG_TARGET_ramips=y
+          CONFIG_TARGET_ramips_mt7621=y
+          CONFIG_TARGET_ramips_mt7621_DEVICE_${{ matrix.profile }}=y
+          CONFIG_PACKAGE_luci=y
+          CONFIG_PACKAGE_luci-base=y
+          CONFIG_PACKAGE_luci-mod-admin-full=y
+          CONFIG_PACKAGE_luci-theme-bootstrap=y
+          CONFIG_PACKAGE_luci-i18n-base-ar=y
+          CONFIG_PACKAGE_luci-app-ttyd=y
+          CONFIG_PACKAGE_luci-app-watchcat=y
+          CONFIG_PACKAGE_luci-app-nlbwmon=y
+          CONFIG_PACKAGE_luci-app-lldpd=y
+          CONFIG_PACKAGE_lldpd=y
+          CONFIG_PACKAGE_wpad-basic-openssl=y
+          CONFIG_PACKAGE_curl=y
+          CONFIG_PACKAGE_jq=y
+          CONF
+          make defconfig && cp -r ../files ./files && make -j$(nproc)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QWAIRAH-${{ matrix.profile }}
+          path: |
+            openwrt/bin/targets/ramips/mt7621/*sysupgrade.bin
+            openwrt/bin/targets/ramips/mt7621/*kernel.bin
